@@ -83,7 +83,7 @@
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 h-screen w-screen overflow-hidden relative">
+<body class="bg-slate-100 text-slate-800 h-[100dvh] w-screen overflow-hidden relative">
 
     <!-- The Map Container -->
     <div class="absolute inset-0 z-10 w-full h-full">
@@ -119,14 +119,14 @@
         </div>
         
         <!-- Places List -->
-        <div id="places-list" class="flex-grow overflow-y-auto px-6 pb-6 mt-4">
+        <div id="places-list" class="flex-grow overflow-y-auto px-6 pb-12 mt-4">
             <!-- List items injected here -->
         </div>
     </div>
 
     <!-- Right Sidebar (Collab Hub) -->
     <div id="right-sidebar" class="absolute top-0 right-0 h-full w-[400px] max-w-[90vw] bg-white/95 backdrop-blur-xl shadow-2xl border-l border-slate-200 z-[500] transform translate-x-full transition-transform duration-300 flex flex-col shrink-0">
-        <div class="p-6 flex-grow overflow-y-auto flex flex-col">
+        <div class="p-6 pb-12 flex-grow overflow-y-auto flex flex-col">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
                     <i class="ph-fill ph-users-three text-blue-500"></i> Collaboration
