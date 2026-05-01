@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Our Trip Ideas</title>
+    
+    <!-- Tailwind CSS for beautiful styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS for the interactive map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Phosphor Icons for UI elements -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <style>
+        /* Custom map styling */
+        #map { height: 100%; width: 100%; z-index: 10; }
+        
+        /* Overriding Leaflet's default popup */
+        .leaflet-popup-content-wrapper {
+            padding: 0;
+            overflow: hidden;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.2), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .leaflet-popup-content {
+            margin: 0;
+            width: 320px !important;
+            line-height: 1.5;
+        }
+        .leaflet-popup-close-button {
+            color: #fff !important;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            padding: 4px !important;
+        }
+        .leaflet-popup-tip-container {
+            margin-top: -1px;
+        }
+
+        /* Zoom-in Pin Labels */
+        .leaflet-tooltip.custom-pin-label {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            font-family: inherit;
+            white-space: normal;
+            width: 180px;
+            text-align: center;
+            padding: 8px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+            pointer-events: none;
+        }
+        .show-pin-labels .leaflet-tooltip.custom-pin-label {
+            opacity: 1;
+            visibility: visible;
+        }
+        .leaflet-tooltip.custom-pin-label::before { 
+            display: none; 
+        }
+
+        /* Checkbox styling */
+        .toggle-checkbox {
+            accent-color: #3b82f6; 
+            width: 1.125rem;
+            height: 1.125rem;
+            cursor: pointer;
+        }
+
+        /* SVG Progress Ring Animation */
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.5s ease-in-out;
+            transform-origin: 50% 50%;
+        }
+
+        /* Hide scrollbars */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen w-screen overflow-hidden relative">
+
+    <!-- The Map Container -->
+    <div class="absolute inset-0 z-10 w-full h-full">
+        <div id="map"></div>
+    </div>
+
+    <!-- Floating Toggle Buttons (Burgers) -->
+    <button id="left-burger" class="absolute top-4 left-4 z-[400] bg-white p-3 rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 transition-colors text-slate-700 hidden group">
+        <i class="ph-bold ph-list text-xl group-hover:scale-110 transition-transform"></i>
+    </button>
+    <button id="right-burger" class="absolute top-4 right-4 z-[400] bg-blue-600 p-3 rounded-xl shadow-lg border border-blue-500 hover:bg-blue-700 transition-colors text-white group">
+        <i class="ph-bold ph-users text-xl group-hover:scale-110 transition-transform"></i>
+    </button>
+
+    <!-- Left Sidebar UI Overlay -->
+    <div id="left-sidebar" class="absolute top-0 left-0 h-full w-[420px] max-w-[90vw] bg-white/95 backdrop-blur-xl shadow-2xl border-r border-slate-200 z-[500] transform transition-transform duration-300 flex flex-col shrink-0">
+        <!-- Header -->
+        <div class="p-6 pb-2 flex justify-between items-start shrink-0">
+            <div>
+                <h1 class="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2 mb-2">
+                    <i class="ph-fill ph-map-pin-line text-blue-500"></i> The Master Plan
+                </h1>
+                <p class="text-slate-500 text-sm">Explore the locations below. Check the boxes to build your perfect route.</p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0 mt-1">
+                <button onclick="openTutorial()" class="text-slate-400 hover:text-amber-500 bg-slate-100 hover:bg-amber-50 p-2 rounded-full transition-colors" title="How to play">
+                    <i class="ph-bold ph-question text-lg"></i>
+                </button>
+                <button id="close-left-btn" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors">
+                    <i class="ph-bold ph-x text-lg"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Places List -->
+        <div id="places-list" class="flex-grow overflow-y-auto px-6 pb-6 mt-4">
+            <!-- List items injected here -->
+        </div>
+    </div>
+
+    <!-- Right Sidebar (Collab Hub) -->
+    <div id="right-sidebar" class="absolute top-0 right-0 h-full w-[400px] max-w-[90vw] bg-white/95 backdrop-blur-xl shadow-2xl border-l border-slate-200 z-[500] transform translate-x-full transition-transform duration-300 flex flex-col shrink-0">
+        <div class="p-6 flex-grow overflow-y-auto flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                    <i class="ph-fill ph-users-three text-blue-500"></i> Collaboration
+                </h2>
+                <button id="close-collab-btn" class="text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-2 rounded-full transition-colors">
+                    <i class="ph-bold ph-x"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Export Section -->
+                <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+                    <h3 class="font-bold text-blue-900 mb-2">1. Save Your Plan</h3>
+                    <p class="text-xs text-blue-700 mb-4">Export the places you've selected to compare with the group.</p>
+                    <button onclick="openExportModal()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 shadow-md shadow-blue-500/20">
+                        <i class="ph-bold ph-export"></i> Export My Choices
+                    </button>
+                </div>
+
+                <!-- Import Section -->
+                <div class="bg-purple-50 border border-purple-100 rounded-xl p-4 relative">
+                    <h3 class="font-bold text-purple-900 mb-2">2. Combine Plans</h3>
+                    <p class="text-xs text-purple-700 mb-4">Upload JSON files exported by your friends to see the overlap.</p>
+                    <label class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-4 rounded-lg transition-colors flex justify-center items-center gap-2 cursor-pointer shadow-md shadow-purple-500/20">
+                        <i class="ph-bold ph-download-simple"></i> Import JSON Files
+                        <input type="file" id="import-input" accept=".json" multiple class="hidden" onchange="triggerImportWarning(event)">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Group Results Section -->
+            <div class="mt-8 flex-grow flex flex-col">
+                <h3 class="font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4 flex items-center justify-between">
+                    Group Results 
+                    <div class="flex items-center gap-2">
+                        <span id="results-count" class="bg-slate-200 text-slate-600 text-xs px-2 py-0.5 rounded-full">0 Plans Loaded</span>
+                        <button onclick="clearCollab()" class="text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 p-1 rounded transition-colors" title="Clear Imported Plans">
+                            <i class="ph-bold ph-trash"></i>
+                        </button>
+                    </div>
+                </h3>
+                
+                <div id="results-list" class="flex-grow space-y-2 overflow-y-auto pr-1">
+                    <div class="text-center text-slate-400 text-sm mt-10 italic">
+                        Import plans above to see the final group votes here!
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal Overlay -->
+    <div id="export-modal" class="fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in-up">
+            <div class="bg-blue-600 p-4 text-white text-center">
+                <h3 class="font-bold text-lg">Export Plan</h3>
+            </div>
+            <div class="p-6">
+                <label class="block text-sm font-bold text-slate-700 mb-2">Your Name</label>
+                <input type="text" id="export-name" placeholder="Enter your name..." class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                
+                <label class="block text-sm font-bold text-slate-700 mb-2">Pick your Avatar</label>
+                <div class="grid grid-cols-5 gap-2 mb-6" id="emoji-picker">
+                    <!-- Emojis populated by JS -->
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="closeExportModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-lg transition-colors">Cancel</button>
+                    <button onclick="confirmExport()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1 shadow-md shadow-blue-500/20">
+                        <i class="ph-bold ph-download-simple"></i> Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tutorial Modal Overlay -->
+    <div id="tutorial-modal" class="fixed inset-0 z-[1000] bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up border-4 border-slate-800">
+            <div class="bg-slate-800 p-5 text-white text-center border-b-4 border-slate-900">
+                <h3 class="font-extrabold text-2xl tracking-widest uppercase flex items-center justify-center gap-2">
+                    <i class="ph-fill ph-compass text-amber-400"></i> Read This First
+                </h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="font-bold text-slate-600 mb-2 text-center">Listen. We are not making a strict, minute-by-minute itinerary. We are adults. We're just making a list of Points of Interest (POIs) we <em class="italic">might</em> actually drag ourselves to.</p>
+                <ul class="space-y-3 text-sm text-slate-700">
+                    <li class="flex gap-3 items-start"><div class="bg-blue-100 p-1.5 rounded text-blue-600 shrink-0"><i class="ph-bold ph-list-magnifying-glass"></i></div><div><strong>1. Doomscroll:</strong> Look through the Master Plan list on the left.</div></li>
+                    <li class="flex gap-3 items-start"><div class="bg-amber-100 p-1.5 rounded text-amber-600 shrink-0"><i class="ph-bold ph-magnifying-glass"></i></div><div><strong>2. Doubt Everything:</strong> Click a place, then hit the 🔍 button in the popup if you don't trust my completely unbiased descriptions.</div></li>
+                    <li class="flex gap-3 items-start"><div class="bg-emerald-100 p-1.5 rounded text-emerald-600 shrink-0"><i class="ph-bold ph-check-square-offset"></i></div><div><strong>3. Judge Harshly:</strong> Keep (✅) or discard (❌) places. Again, it's just a POI pool, not a blood pact.</div></li>
+                    <li class="flex gap-3 items-start"><div class="bg-purple-100 p-1.5 rounded text-purple-600 shrink-0"><i class="ph-bold ph-export"></i></div><div><strong>4. Demand Validation:</strong> Open the Collab Hub (right menu) and Export your highly superior choices.</div></li>
+                    <li class="flex gap-3 items-start"><div class="bg-rose-100 p-1.5 rounded text-rose-600 shrink-0"><i class="ph-bold ph-users"></i></div><div><strong>5. Argue:</strong> Import your friends' files to see how incredibly wrong their choices are.</div></li>
+                </ul>
+                <div class="pt-4">
+                    <button onclick="closeTutorial()" class="w-full bg-amber-400 hover:bg-amber-500 text-slate-900 font-extrabold tracking-widest uppercase py-3 rounded-xl transition-transform hover:scale-[1.02] active:scale-95 border-b-4 border-amber-600 flex items-center justify-center gap-2">
+                        <i class="ph-bold ph-check-circle"></i> Fine, I get it
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Warning Modal -->
+    <div id="import-warning-modal" class="fixed inset-0 z-[1000] bg-slate-900/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in-up border border-red-100">
+            <div class="bg-red-500 p-4 text-white text-center flex items-center justify-center gap-2">
+                <i class="ph-bold ph-warning text-xl"></i>
+                <h3 class="font-bold text-lg">Wait a minute!</h3>
+            </div>
+            <div class="p-6 text-center">
+                <p class="text-slate-600 mb-6 font-medium">Importing these files will <strong>overwrite your current selections</strong> and switch to the group's results.<br><br>Are you sure you want to proceed?</p>
+                <div class="flex gap-3">
+                    <button onclick="cancelImport()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-lg transition-colors">Cancel</button>
+                    <button onclick="confirmImport()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 rounded-lg transition-colors shadow-md shadow-red-500/20">Proceed</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Color mapping for Progress Rings
+        const colorMap = {
+            emerald: '#10b981', purple: '#a855f7', blue: '#3b82f6', amber: '#f59e0b',
+            rose: '#f43f5e', red: '#ef4444', orange: '#f97316', teal: '#14b8a6',
+            indigo: '#6366f1', yellow: '#eab308', pink: '#ec4899'
+        };
+
+        // 1. Define the places
+        const places = [
+            // HISTORY & EXPLORATION
+            {
+                name: "Underground City Osówka", metaCategory: "Manual Picks", category: "History & Exploration", emoji: "🔦",
+                lat: 50.6703, lng: 16.4182, duration: 2, durationText: "2 hours",
+                why: "Massive secret Nazi tunnels carved straight into the mountains. Forget boring corporate retreats—this is cold, dark, echoing concrete labyrinths. It's creepy, classified, and objectively badass.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Os%C3%B3wka", pinClass: "bg-emerald-500/10 border-emerald-500/30 text-emerald-800", solidBg: "bg-emerald-600"
+            },
+            {
+                name: "Sztolnie Walimskie", metaCategory: "Manual Picks", category: "History & Exploration", emoji: "🦇",
+                lat: 50.6865, lng: 16.4447, duration: 1.5, durationText: "1.5 hours",
+                why: "More classified underground ruins. It’s giving straight-up post-apocalyptic survival vibes. Way better than checking Slack—we actually get to explore the dark corners we aren't supposed to be in.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Sztolnie+Walimskie", pinClass: "bg-emerald-500/10 border-emerald-500/30 text-emerald-800", solidBg: "bg-emerald-600"
+            },
+            {
+                name: "Grodno Castle", metaCategory: "Manual Picks", category: "History & Exploration", emoji: "🏰",
+                lat: 50.7495, lng: 16.4442, duration: 2, durationText: "2 hours",
+                why: "An actual decaying medieval castle on a creepy hill. Perfect for pretending we own the place and taking moody photos to make everyone stuck in the office violently jealous.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Grodno+Castle", pinClass: "bg-emerald-500/10 border-emerald-500/30 text-emerald-800", solidBg: "bg-emerald-600"
+            },
+            {
+                name: "Srebrna Góra", metaCategory: "Manual Picks", category: "History & Exploration", emoji: "🧱",
+                lat: 50.5750, lng: 16.6480, duration: 3, durationText: "3 hours",
+                why: "A colossal, impenetrable mountain fortress. We can climb all over the huge brick ruins, explore the dark casemates, and finally scream into the void about our adult responsibilities.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Srebrna+G%C3%B3ra", pinClass: "bg-emerald-500/10 border-emerald-500/30 text-emerald-800", solidBg: "bg-emerald-600"
+            },
+
+            // CORNERSTONES
+            {
+                name: "Adršpach rocks valley", metaCategory: "Cornerstones", category: "The Core Route", emoji: "🪨",
+                lat: 50.6146, lng: 16.1218, duration: 4, durationText: "4+ hours",
+                why: "Insanely massive, towering rock formations that look like an alien planet. We can squeeze through terrifying gaps and climb around for epic photos that prove we haven't surrendered to suburban domesticity.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Adrspach", pinClass: "bg-red-500/10 border-red-500/30 text-red-800", solidBg: "bg-red-600"
+            },
+
+            // MOUNTAINS & NATURE
+            {
+                name: "Broumovské Stěny", metaCategory: "Manual Picks", category: "Mountains & Nature", emoji: "⛰️",
+                lat: 50.5369, lng: 16.3014, duration: 3, durationText: "3 hours",
+                why: "Epic rock formations with insane drop-offs. The ultimate spot for cliffside selfies that will definitely void our life insurance policies. Pure chaotic good energy.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Broumovsk%C3%A9+St%C4%9Bny", pinClass: "bg-amber-500/10 border-amber-500/30 text-amber-800", solidBg: "bg-amber-600"
+            },
+            {
+                name: "Ostaš", metaCategory: "Manual Picks", category: "Mountains & Nature", emoji: "🧗",
+                lat: 50.5606, lng: 16.2056, duration: 2.5, durationText: "2.5 hours",
+                why: "A literal maze of giant rocks. We can squeeze through tight gaps and stand on ledges we definitely shouldn't be standing on, aggressively ignoring our rapidly degrading lower backs.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Osta%C5%A1", pinClass: "bg-amber-500/10 border-amber-500/30 text-amber-800", solidBg: "bg-amber-600"
+            },
+            {
+                name: "Owl Mountains", metaCategory: "Manual Picks", category: "Mountains & Nature", emoji: "🦉",
+                lat: 50.6500, lng: 16.4833, duration: 3.5, durationText: "3.5 hours",
+                why: "Dark, foggy forests and steep trails that look straight out of a horror movie. Great for getting lost, turning off our phones, and pretending we're in a survival game instead of reality.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Owl+Mountains", pinClass: "bg-amber-500/10 border-amber-500/30 text-amber-800", solidBg: "bg-amber-600"
+            },
+            {
+                name: "Chełmiec - lookout tower", metaCategory: "Manual Picks", category: "Mountains & Nature", emoji: "🗼",
+                lat: 50.7803, lng: 16.2106, duration: 1, durationText: "1 hour",
+                why: "A creepy old stone tower at the top of a mountain. Climb to the top for crazy views, immaculate gothic photos, and to prove our cardio isn't completely dead yet.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Che%C5%82miec+lookout+tower", pinClass: "bg-amber-500/10 border-amber-500/30 text-amber-800", solidBg: "bg-amber-600"
+            },
+            {
+                name: "Rudawy Janowickie", metaCategory: "Manual Picks", category: "Mountains & Nature", emoji: "🌲",
+                lat: 50.8167, lng: 15.9000, duration: 3, durationText: "3 hours",
+                why: "A wild mountain range with weird rock formations and abandoned ruins hidden in the woods. Peak exploration material for wandering around and pretending we don't have jobs to return to.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Rudawy+Janowickie", pinClass: "bg-amber-500/10 border-amber-500/30 text-amber-800", solidBg: "bg-amber-600"
+            },
+            {
+                name: "Kolorowe Jeziorka", metaCategory: "Manual Picks", category: "Mountains & Nature", emoji: "🧪",
+                lat: 50.8286, lng: 15.9744, duration: 2, durationText: "2 hours",
+                why: "Literal neon-colored lakes hidden in the forest. Looks like a toxic waste spill, but in a cool, highly-photogenic alien planet way. Infinitely better than staring at spreadsheets.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Kolorowe+Jeziorka", pinClass: "bg-amber-500/10 border-amber-500/30 text-amber-800", solidBg: "bg-amber-600"
+            },
+            {
+                name: "Bukówka fishery", metaCategory: "Manual Picks", category: "Mountains & Nature", emoji: "🎣",
+                lat: 50.7100, lng: 15.9800, duration: 0.5, durationText: "Pass through",
+                why: "A massive reservoir surrounded by mountains. Great place to chill by the water, skip rocks, and aggressively ignore any incoming emails from the outside world.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Buk%C3%B3wka+fishery", pinClass: "bg-amber-500/10 border-amber-500/30 text-amber-800", solidBg: "bg-amber-600"
+            },
+
+            // ACCOMMODATION & CULTURE
+            {
+                name: "Dům hostů", metaCategory: "Manual Picks", category: "Accommodation & Culture", emoji: "🕯️",
+                lat: 50.5866, lng: 16.3330, duration: -1, durationText: "Overnight Basecamp",
+                why: "We gotta sleep somewhere, and crashing in a massive, ancient monastery is a flex. It’s got that eerie, dark-academia aesthetic, plus it’s a sick basecamp to hide from our 30s.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=D%C5%AFm+host%C5%AF", pinClass: "bg-blue-500/10 border-blue-500/30 text-blue-800", solidBg: "bg-blue-600"
+            },
+            {
+                name: "Villa Greta Pensjonat", metaCategory: "Manual Picks", category: "Accommodation & Culture", emoji: "🏡",
+                lat: 50.9764, lng: 15.8978, duration: -1, durationText: "Overnight Basecamp",
+                why: "A quirky, aesthetic guest house with amazing food. A perfect spot to crash, drink heavily, and regain our HP after we exhaust ourselves pretending our knees don't pop when we hike.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Villa+Greta+Pensjonat", pinClass: "bg-blue-500/10 border-blue-500/30 text-blue-800", solidBg: "bg-blue-600"
+            },
+            {
+                name: "Las Skarpa apartamenty", metaCategory: "Manual Picks", category: "Accommodation & Culture", emoji: "🪵",
+                lat: 50.6000, lng: 16.4000, duration: -1, durationText: "Overnight Basecamp",
+                why: "Super cool apartments with major aesthetic cabin vibes. Perfect for late-night talks, drinking wine, and completely avoiding any thoughts of our 401ks.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Las+Skarpa+apartamenty", pinClass: "bg-blue-500/10 border-blue-500/30 text-blue-800", solidBg: "bg-blue-600"
+            },
+            {
+                name: "Centrum Turystyki Niekonwencjonalnej", metaCategory: "Manual Picks", category: "Accommodation & Culture", emoji: "⛺",
+                lat: 50.5735, lng: 16.6433, duration: -1, durationText: "Overnight Basecamp",
+                why: "'Unconventional Tourism Center' - sounds sketchy in the best way possible. The ultimate chaotic basecamp for our adventures where absolutely nobody can reach us.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Centrum+Turystyki+Niekonwencjonalnej", pinClass: "bg-blue-500/10 border-blue-500/30 text-blue-800", solidBg: "bg-blue-600"
+            },
+            {
+                name: "Barokowy Zakątek", metaCategory: "Manual Picks", category: "Accommodation & Culture", emoji: "🏨",
+                lat: 50.7000, lng: 16.3000, duration: -1, durationText: "Overnight Basecamp",
+                why: "A baroque-style spot. Because sometimes we need to sleep somewhere that looks like we inherited a haunted mansion and are just waiting for a murder mystery to kick off.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Barokowy+Zak%C4%85tek", pinClass: "bg-blue-500/10 border-blue-500/30 text-blue-800", solidBg: "bg-blue-600"
+            },
+            {
+                name: "Fara Zdoňov", metaCategory: "Manual Picks", category: "Accommodation & Culture", emoji: "🗝️",
+                lat: 50.6300, lng: 16.1400, duration: -1, durationText: "Overnight Basecamp",
+                why: "An old parish house turned into apartments right next to the rock cities. Maximum haunted village vibes, 10/10 aesthetic for late-night drinks and existential ghost stories.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Fara+Zdo%C5%88ov", pinClass: "bg-blue-500/10 border-blue-500/30 text-blue-800", solidBg: "bg-blue-600"
+            },
+
+            // CULTURE & ART
+            {
+                name: "Krzeszów Abbey", metaCategory: "Manual Picks", category: "Culture & Art", emoji: "⛪",
+                lat: 50.7333, lng: 16.0667, duration: 1.5, durationText: "1.5 hours",
+                why: "A ridiculously massive church covered in gold and dramatic statues. Ultimate gothic energy, looks like the final boss level of a dark fantasy game. Great place to repent for our life choices.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Krzesz%C3%B3w+Abbey", pinClass: "bg-pink-500/10 border-pink-500/30 text-pink-800", solidBg: "bg-pink-600"
+            },
+            {
+                name: "Broumov Monastery", metaCategory: "Manual Picks", category: "Culture & Art", emoji: "🕍",
+                lat: 50.5833, lng: 16.3333, duration: 1.5, durationText: "1.5 hours",
+                why: "Huge, slightly spooky ancient monastery with an insane old library. It's giving pure Hogwarts/Dark Academia vibes. Perfect for dramatic brooding about our lost youth.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Broumov+Monastery", pinClass: "bg-pink-500/10 border-pink-500/30 text-pink-800", solidBg: "bg-pink-600"
+            },
+            {
+                name: "Bridge of Penitents", metaCategory: "Manual Picks", category: "Culture & Art", emoji: "🌉",
+                lat: 51.1123, lng: 17.0326, duration: 0.5, durationText: "Quick Stop",
+                why: "A dizzyingly high bridge connecting two church towers. Legend says it's haunted by ghosts. Perfect for testing our fading adrenaline tolerance and taking wild photos.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Bridge+of+Penitents", pinClass: "bg-pink-500/10 border-pink-500/30 text-pink-800", solidBg: "bg-pink-600"
+            },
+            {
+                name: "University of Wrocław", metaCategory: "Manual Picks", category: "Culture & Art", emoji: "🏛️",
+                lat: 51.1140, lng: 17.0345, duration: 1.5, durationText: "1.5 hours",
+                why: "Looks exactly like a wizarding school. We can wander the ridiculously ornate halls and pretend we're studying dark magic instead of worrying about our cholesterol.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=University+of+Wroc%C5%82aw", pinClass: "bg-pink-500/10 border-pink-500/30 text-pink-800", solidBg: "bg-pink-600"
+            },
+            
+            // WROCŁAW EVENTS
+            {
+                name: "Asian Festival Wrocław", metaCategory: "Manual Picks", category: "Wrocław Events", emoji: "🍜",
+                lat: 51.1066, lng: 17.0286, duration: 2, durationText: "May 8-10, 2026",
+                why: "A massive Asian street food festival right in the center of Wrocław. A great excuse to overeat Bao buns and pretend we are culturally enriching ourselves instead of just binge-eating.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Plac+Wolno%C5%9Bci,+Wroc%C5%82aw", eventLink: "https://www.wroclawguide.com/en/events/asian-festival-wroclaw/", pinClass: "bg-rose-500/10 border-rose-500/30 text-rose-800", solidBg: "bg-rose-600"
+            },
+            {
+                name: "Matcha Festival", metaCategory: "Manual Picks", category: "Wrocław Events", emoji: "🍵",
+                lat: 51.1064, lng: 17.0288, duration: 1.5, durationText: "May 8-10, 2026",
+                why: "Literally a festival dedicated to matcha. We can get highly caffeinated on green tea and aggressively complain about the modern aesthetic while taking identical photos for our stories.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Plac+Wolno%C5%9Bci,+Wroc%C5%82aw", eventLink: "https://www.wroclawguide.com/en/events/matcha-festival-part-of-the-japanese-festival/", pinClass: "bg-rose-500/10 border-rose-500/30 text-rose-800", solidBg: "bg-rose-600"
+            },
+            {
+                name: "Springtime Impressions", metaCategory: "Manual Picks", category: "Wrocław Events", emoji: "🎵",
+                lat: 51.1062, lng: 17.0283, duration: 2, durationText: "Evening Event",
+                why: "A fancy choir concert at the National Forum of Music. We can dress up, listen to some intense choral music, and feel vastly intellectually superior to everyone else for exactly two hours.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=National+Forum+of+Music,+Wroc%C5%82aw", eventLink: "https://www.wroclawguide.com/en/events/springtime-impressions-music-lovers-choir-at-nfm/", pinClass: "bg-rose-500/10 border-rose-500/30 text-rose-800", solidBg: "bg-rose-600"
+            },
+            {
+                name: "Coffee Festival Wrocław", metaCategory: "Manual Picks", category: "Wrocław Events", emoji: "☕",
+                lat: 51.0886, lng: 17.0427, duration: 3, durationText: "Weekend Event",
+                why: "An entire festival dedicated to coffee inside an old brewery. We can sample insane roasts, buy expensive beans, and vibrate at frequencies completely unknown to normal, decaffeinated humans.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Browar+Mieszcza%C5%84ski,+Wroc%C5%82aw", eventLink: "https://www.wroclawguide.com/en/events/coffee-festival-wroclaw/", pinClass: "bg-rose-500/10 border-rose-500/30 text-rose-800", solidBg: "bg-rose-600"
+            },
+            
+            // --- AI WILDCARDS ---
+            
+            // AI: Activities & Adrenaline
+            {
+                name: "Kletno Uranium Mine", metaCategory: "AI Wildcards", category: "Activities & Adrenaline", emoji: "☢️",
+                lat: 50.2526, lng: 16.8483, duration: 1.5, durationText: "1.5 hours",
+                why: "A Soviet-era secret uranium mine. Dark, damp, and slightly radioactive. Honestly, spending time here is probably much better for our blood pressure than reading the daily news.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Kopalnia+Uranu+Kletno", pinClass: "bg-orange-500/10 border-orange-500/30 text-orange-800", solidBg: "bg-orange-600"
+            },
+            {
+                name: "Skull Chapel in Czermna", metaCategory: "AI Wildcards", category: "Activities & Adrenaline", emoji: "💀",
+                lat: 50.4497, lng: 16.2413, duration: 0.5, durationText: "Quick Stop",
+                why: "A literal chapel made of over 3,000 real human skulls and bones. The ultimate goth aesthetic and a fantastic visual reminder that our work deadlines truly do not matter.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Kaplica+Czaszek+Czermna", pinClass: "bg-orange-500/10 border-orange-500/30 text-orange-800", solidBg: "bg-orange-600"
+            },
+            {
+                name: "Błędne Skały (Errant Rocks)", metaCategory: "AI Wildcards", category: "Activities & Adrenaline", emoji: "🧗‍♂️",
+                lat: 50.4811, lng: 16.2861, duration: 2, durationText: "2 hours",
+                why: "A claustrophobic, misty labyrinth of giant rocks. They filmed parts of Narnia here, but we're mainly just going to use it to completely drop off the grid and hide from our emails.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=B%C5%82%C4%99dne+Ska%C5%82y", pinClass: "bg-orange-500/10 border-orange-500/30 text-orange-800", solidBg: "bg-orange-600"
+            },
+            {
+                name: "Kłodzko Fortress Tunnels", metaCategory: "AI Wildcards", category: "Activities & Adrenaline", emoji: "💣",
+                lat: 50.4402, lng: 16.6534, duration: 2, durationText: "2 hours",
+                why: "An underground military maze so tight you literally have to crawl in the pitch dark. Perfect for inducing the kind of panic attacks that aren't related to finances or the housing market.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Twierdza+K%C5%82odzka", pinClass: "bg-orange-500/10 border-orange-500/30 text-orange-800", solidBg: "bg-orange-600"
+            },
+            {
+                name: "Złoty Stok Gold Mine", metaCategory: "AI Wildcards", category: "Activities & Adrenaline", emoji: "🎢",
+                lat: 50.4385, lng: 16.8741, duration: 2.5, durationText: "2.5 hours",
+                why: "We get to look at an underground waterfall and then literally slide down massive metal pipes in the dark. Pure, unsupervised childhood joy, but with adult legal liability.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Kopalnia+Z%C5%82ota+Z%C5%82oty+Stok", pinClass: "bg-orange-500/10 border-orange-500/30 text-orange-800", solidBg: "bg-orange-600"
+            },
+
+            // AI: Unhinged Accommodations
+            {
+                name: "Schronisko PTTK Pasterka", metaCategory: "AI Wildcards", category: "Unhinged Accommodations", emoji: "🚫",
+                lat: 50.4820, lng: 16.3262, duration: -1, durationText: "Overnight Basecamp",
+                why: "Known locally as the 'end of the world'. No cell service, weird art everywhere, lots of beer, and the border is out the back door. The IRS literally cannot find us here.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Schronisko+Pasterka", pinClass: "bg-teal-500/10 border-teal-500/30 text-teal-800", solidBg: "bg-teal-600"
+            },
+            {
+                name: "Hotel Zamek Książ", metaCategory: "AI Wildcards", category: "Unhinged Accommodations", emoji: "🦹",
+                lat: 50.8423, lng: 16.2933, duration: -1, durationText: "Overnight Basecamp",
+                why: "Sleep inside the third-largest castle in Poland, perched on a cliff, with secret Nazi tunnels underneath it. Peak villain origin story basecamp. We deserve this level of drama.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Hotel+Zamek+Ksi%C4%85%C5%BC", pinClass: "bg-teal-500/10 border-teal-500/30 text-teal-800", solidBg: "bg-teal-600"
+            },
+            {
+                name: "Pensjonat Złoty Jar", metaCategory: "AI Wildcards", category: "Unhinged Accommodations", emoji: "🌲",
+                lat: 50.4312, lng: 16.8831, duration: -1, durationText: "Overnight Basecamp",
+                why: "An insanely aesthetic, moody 19th-century guesthouse hidden deep in a gold mining forest. Looks like an indie horror movie set, but the food is incredible.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Pensjonat+Z%C5%82oty+Jar", pinClass: "bg-teal-500/10 border-teal-500/30 text-teal-800", solidBg: "bg-teal-600"
+            },
+            {
+                name: "Pałac Kamieniec", metaCategory: "AI Wildcards", category: "Unhinged Accommodations", emoji: "👑",
+                lat: 50.4331, lng: 16.8521, duration: -1, durationText: "Overnight Basecamp",
+                why: "A painstakingly restored boutique palace. We can cosplay as 18th-century minor aristocrats whose biggest daily stress is whether the soup is too hot, rather than our 401ks.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Pa%C5%82ac+Kamieniec", pinClass: "bg-teal-500/10 border-teal-500/30 text-teal-800", solidBg: "bg-teal-600"
+            },
+            {
+                name: "Glamping Sowie Klimaty", metaCategory: "AI Wildcards", category: "Unhinged Accommodations", emoji: "🏕️",
+                lat: 50.6400, lng: 16.5100, duration: -1, durationText: "Overnight Basecamp",
+                why: "Luxury yurts in the middle of nowhere. It's camping for people who absolutely hate camping but desperately want the woodland aesthetic for their Instagram.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Glamping+Sowie+Klimaty", pinClass: "bg-teal-500/10 border-teal-500/30 text-teal-800", solidBg: "bg-teal-600"
+            },
+
+            // AI: Dark Sightseeing
+            {
+                name: "Project Riese: Włodarz", metaCategory: "AI Wildcards", category: "Dark Sightseeing", emoji: "🚤",
+                lat: 50.7027, lng: 16.4258, duration: 2.5, durationText: "2.5 hours",
+                why: "The largest, most flooded section of the secret underground Nazi city. We have to navigate it by boat in pitch black water. Absolutely terrifying and highly recommended.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Kompleks+W%C5%82odarz", pinClass: "bg-indigo-500/10 border-indigo-500/30 text-indigo-800", solidBg: "bg-indigo-600"
+            },
+            {
+                name: "Pałac Marianny Orańskiej Ruins", metaCategory: "AI Wildcards", category: "Dark Sightseeing", emoji: "🥀",
+                lat: 50.5230, lng: 16.8821, duration: 1.5, durationText: "1.5 hours",
+                why: "Monumental neo-gothic palace ruins. Massive tragic history, crumbling architecture, and immaculate opportunities for dramatic sighing while looking out of broken windows.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Pa%C5%82ac+Marianny+Ora%C5%84skiej", pinClass: "bg-indigo-500/10 border-indigo-500/30 text-indigo-800", solidBg: "bg-indigo-600"
+            },
+            {
+                name: "Szczeliniec Wielki", metaCategory: "AI Wildcards", category: "Dark Sightseeing", emoji: "🦅",
+                lat: 50.4855, lng: 16.3392, duration: 2.5, durationText: "2.5 hours",
+                why: "A bizarre, flat-topped mountain accessible only by hundreds of ancient stone stairs. Great place to sit on a terrifying edge and silently question all of our life choices.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Szczeliniec+Wielki", pinClass: "bg-indigo-500/10 border-indigo-500/30 text-indigo-800", solidBg: "bg-indigo-600"
+            },
+            {
+                name: "Wambierzyce Basilica", metaCategory: "AI Wildcards", category: "Dark Sightseeing", emoji: "🛸",
+                lat: 50.4897, lng: 16.4552, duration: 1, durationText: "1 hour",
+                why: "Nicknamed the 'Silesian Jerusalem'. It's terrifyingly huge, lights up like a UFO at night, and feels completely out of place. Highly surreal, slightly unsettling vibes.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Sanktuarium+Wambierzyce", pinClass: "bg-indigo-500/10 border-indigo-500/30 text-indigo-800", solidBg: "bg-indigo-600"
+            },
+            {
+                name: "Náchod Castle Bear Moat", metaCategory: "AI Wildcards", category: "Dark Sightseeing", emoji: "🐻",
+                lat: 50.4184, lng: 16.1627, duration: 0.5, durationText: "Quick Stop",
+                why: "A massive castle overlooking the Czech border. They have live bears living in the moat. Yes, real bears. Why? Who knows. We simply must go investigate this madness.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Nachod+Castle", pinClass: "bg-indigo-500/10 border-indigo-500/30 text-indigo-800", solidBg: "bg-indigo-600"
+            },
+
+            // AI: Vibe Check (Food & Drinks)
+            {
+                name: "Primátor Brewery Náchod", metaCategory: "AI Wildcards", category: "Vibe Check (Food & Drinks)", emoji: "🍻",
+                lat: 50.4150, lng: 16.1700, duration: 2, durationText: "2 hours",
+                why: "Right over the Czech border. We are adults now, which means we can legally go to the source and drink award-winning Czech beer until we completely forget our knee pain.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Pivovar+Primator", pinClass: "bg-yellow-500/10 border-yellow-500/30 text-yellow-800", solidBg: "bg-yellow-600"
+            },
+            {
+                name: "Browar Jedlinka", metaCategory: "AI Wildcards", category: "Vibe Check (Food & Drinks)", emoji: "🍺",
+                lat: 50.7180, lng: 16.3385, duration: 2, durationText: "2 hours",
+                why: "Craft brewery located on an old palace estate right next to a full-size replica of the Red Baron's plane. Drinking beer and looking at weird history is peak 30s culture.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Browar+Jedlinka", pinClass: "bg-yellow-500/10 border-yellow-500/30 text-yellow-800", solidBg: "bg-yellow-600"
+            },
+            {
+                name: "Schronisko Szwajcarka", metaCategory: "AI Wildcards", category: "Vibe Check (Food & Drinks)", emoji: "🍲",
+                lat: 50.8350, lng: 15.9125, duration: 1.5, durationText: "1.5 hours",
+                why: "A Swiss-style wooden hut from 1823 hidden high in the mountains. We hike up, we eat massive plates of heavy food, we nap. Flawless execution of a day.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Schronisko+Szwajcarka", pinClass: "bg-yellow-500/10 border-yellow-500/30 text-yellow-800", solidBg: "bg-yellow-600"
+            },
+            {
+                name: "Dworzysko Szczawno-Zdrój", metaCategory: "AI Wildcards", category: "Vibe Check (Food & Drinks)", emoji: "🍷",
+                lat: 50.8038, lng: 16.2520, duration: 2, durationText: "2 hours",
+                why: "Incredibly chic restaurant set in historical stables. We can drink fancy wine and briefly pretend we actually have our lives completely figured out.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Dworzysko+Szczawno+Zdroj", pinClass: "bg-yellow-500/10 border-yellow-500/30 text-yellow-800", solidBg: "bg-yellow-600"
+            },
+            {
+                name: "Smażalnia Ryb Bukówka", metaCategory: "AI Wildcards", category: "Vibe Check (Food & Drinks)", emoji: "🐟",
+                lat: 50.7120, lng: 15.9850, duration: 1, durationText: "1 hour",
+                why: "Because nothing says 'I'm aggressively avoiding city life' quite like eating freshly fried fish on a flimsy paper plate while staring blankly at a mountain reservoir.",
+                gmaps: "https://www.google.com/maps/search/?api=1&query=Sma%C5%BCalnia+Buk%C3%B3wka", pinClass: "bg-yellow-500/10 border-yellow-500/30 text-yellow-800", solidBg: "bg-yellow-600"
+            }
+        ];
+
+        // Assign IDs and initial state to all places
+        places.forEach((p, i) => {
+            p.id = 'place_' + i;
+            p.isSelected = true; // Changed to enable all places by default
+            
+            // Extract core color for progress ring
+            const baseColorName = p.pinClass.match(/bg-([a-z]+)-/)[1];
+            p.hexColor = colorMap[baseColorName] || '#3b82f6';
+        });
+
+        // Global references
+        window.allPlaces = places;
+        window.mapMarkers = {};
+        window.sidebarItems = {};
+        window.collabItems = {}; // ADDED: to track Collab Hub items
+        window.categoryCheckboxes = {};
+        window.metaCheckboxes = {};
+        window.importedData = []; // Array of {user, avatar, places: [ids]}
+
+        // 2. Initialize the Map
+        const map = L.map('map', { zoomControl: false });
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        map.on('zoomend', function() {
+            const mapEl = document.getElementById('map');
+            if (map.getZoom() >= 12) mapEl.classList.add('show-pin-labels');
+            else mapEl.classList.remove('show-pin-labels');
+        });
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            subdomains: 'abcd', maxZoom: 20
+        }).addTo(map);
+
+        const bounds = [];
+        const listContainer = document.getElementById('places-list');
+
+        // Group places
+        const groupedPlaces = places.reduce((acc, place) => {
+            const meta = place.metaCategory || "Other";
+            if (!acc[meta]) acc[meta] = {};
+            const cat = place.category;
+            if (!acc[meta][cat]) acc[meta][cat] = [];
+            acc[meta][cat].push(place);
+            return acc;
+        }, {});
+
+        const sortedMetaCategories = Object.keys(groupedPlaces).sort((a, b) => {
+            if (a === "Cornerstones") return -1;
+            if (b === "Cornerstones") return 1;
+            if (a === "AI Wildcards") return 1;
+            if (b === "AI Wildcards") return -1;
+            return 0;
+        });
+
+        // Generate SVG Progress Ring based on duration
+        function getProgressRing(duration, hexColor, isSquare) {
+            // max duration for full ring calculation is 4 hours
+            let progress = 0;
+            if (duration === -1) progress = 100; // Overnight = 100%
+            else if (duration > 0) progress = Math.min((duration / 4) * 100, 100);
+            
+            const dashOffset = 100 - progress;
+            const trackColor = '#e2e8f0';
+
+            // By removing drop shadows from the container and adding them directly to the ring and the inner circle,
+            // we remove the messy box shadow overlap that was showing up!
+            if (isSquare) {
+                return `
+                <svg class="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none drop-shadow-sm" viewBox="0 0 100 100">
+                    <rect x="5" y="5" width="90" height="90" rx="22" fill="none" stroke="${trackColor}" stroke-width="6"/>
+                    <rect x="5" y="5" width="90" height="90" rx="22" fill="none" stroke="${hexColor}" stroke-width="6" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${dashOffset}" class="progress-ring-circle" stroke-linecap="round"/>
+                </svg>`;
+            } else {
+                return `
+                <svg class="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none drop-shadow-sm" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="${trackColor}" stroke-width="6"/>
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="${hexColor}" stroke-width="6" pathLength="100" stroke-dasharray="100" stroke-dashoffset="${dashOffset}" class="progress-ring-circle" stroke-linecap="round"/>
+                </svg>`;
+            }
+        }
+
+        // Helper: Update checkboxes
+        function updateParentCheckboxes() {
+            Object.keys(groupedPlaces).forEach(metaCategory => {
+                let metaAll = true, metaSome = false;
+                Object.keys(groupedPlaces[metaCategory]).forEach(category => {
+                    const catPlaces = groupedPlaces[metaCategory][category];
+                    const catAll = catPlaces.every(p => p.isSelected);
+                    const catSome = catPlaces.some(p => p.isSelected);
+                    const catCb = window.categoryCheckboxes[`${metaCategory}_${category}`];
+                    if (catCb) { catCb.checked = catAll; catCb.indeterminate = catSome && !catAll; }
+                    if (!catAll) metaAll = false;
+                    if (catSome) metaSome = true;
+                });
+                const metaCb = window.metaCheckboxes[metaCategory];
+                if (metaCb) { metaCb.checked = metaAll; metaCb.indeterminate = metaSome && !metaAll; }
+            });
+        }
+
+        // Global Toggle Function
+        window.setPlaceState = function(id, state) {
+            const place = window.allPlaces.find(p => p.id === id);
+            if (!place) return;
+            place.isSelected = state;
+            
+            const marker = window.mapMarkers[id];
+            if (marker) {
+                if (state && !map.hasLayer(marker)) marker.addTo(map);
+                else if (!state && map.hasLayer(marker)) map.removeLayer(marker);
+            }
+            
+            // Update Left Sidebar
+            const sidebarObj = window.sidebarItems[id];
+            if (sidebarObj) {
+                sidebarObj.checkbox.checked = state;
+                if (state) sidebarObj.element.classList.remove('opacity-40', 'grayscale');
+                else sidebarObj.element.classList.add('opacity-40', 'grayscale');
+            }
+            
+            // Update Collab Hub Sidebar
+            const collabObj = window.collabItems[id];
+            if (collabObj) {
+                collabObj.checkbox.checked = state;
+                if (state) collabObj.element.classList.remove('opacity-40', 'grayscale');
+                else collabObj.element.classList.add('opacity-40', 'grayscale');
+            }
+            
+            updateParentCheckboxes();
+        };
+
+        // Custom Focus Function to calculate visible center dynamically
+        window.focusOnPlace = function(placeId) {
+            const place = window.allPlaces.find(p => p.id === placeId);
+            const marker = window.mapMarkers[placeId];
+            if (!place || !marker) return;
+            
+            if (!place.isSelected) window.setPlaceState(place.id, true);
+            
+            const zoom = 13;
+            const leftSidebar = document.getElementById('left-sidebar');
+            const rightSidebar = document.getElementById('right-sidebar');
+            
+            let leftObstruct = 0;
+            let rightObstruct = 0;
+            
+            // Auto-close sidebars on mobile (< 768px) for better UX
+            if (window.innerWidth < 768) {
+                leftSidebar.classList.add('-translate-x-full');
+                document.getElementById('left-burger').classList.remove('hidden');
+                rightSidebar.classList.add('translate-x-full');
+                document.getElementById('right-burger').classList.remove('hidden');
+            } else {
+                // On desktop, calculate widths of open sidebars
+                if (!leftSidebar.classList.contains('-translate-x-full')) leftObstruct = leftSidebar.offsetWidth;
+                if (!rightSidebar.classList.contains('translate-x-full')) rightObstruct = rightSidebar.offsetWidth;
+            }
+            
+            const mapWidth = document.getElementById('map').offsetWidth;
+            
+            // Calculate pixel offset needed to move map center to the true visible center
+            const visibleCenterX = leftObstruct + (mapWidth - leftObstruct - rightObstruct) / 2;
+            const absoluteCenterX = mapWidth / 2;
+            const offsetX = absoluteCenterX - visibleCenterX;
+            
+            // Shift map center down so popup box is visually centered (not just the pin tail)
+            const offsetY = -140; 
+            
+            const targetPt = map.project([place.lat, place.lng], zoom);
+            targetPt.x += offsetX;
+            targetPt.y += offsetY;
+            
+            const centerLatLng = map.unproject(targetPt, zoom);
+            
+            map.flyTo(centerLatLng, zoom, { duration: 1.5 });
+            setTimeout(() => marker.openPopup(), 1500);
+        };
+
+        // 3. Populate Sidebar and Map Markers
+        sortedMetaCategories.forEach(metaCategory => {
+            const metaWrapper = document.createElement('div');
+            metaWrapper.className = "mb-8";
+            
+            const isWildcard = metaCategory === "AI Wildcards";
+            const sparkleColor = isWildcard ? "text-purple-500" : "text-amber-400";
+            
+            const metaHeader = document.createElement('div');
+            metaHeader.className = `text-xs font-bold uppercase tracking-widest mb-3 px-1 flex items-center justify-between ${isWildcard ? 'text-purple-600' : 'text-slate-400'}`;
+            metaHeader.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <i class="ph-bold ${isWildcard ? 'ph-magic-wand' : 'ph-sparkle'} ${sparkleColor}"></i> ${metaCategory}
+                </div>
+            `;
+            
+            const metaCb = document.createElement('input');
+            metaCb.type = 'checkbox';
+            metaCb.className = 'toggle-checkbox';
+            metaCb.checked = true; // Changed to true by default
+            metaCb.onclick = (e) => {
+                e.stopPropagation();
+                // Ensure state matches the current user click regardless of nested modifications
+                const targetState = e.target.checked;
+                Object.values(groupedPlaces[metaCategory]).flat().forEach(p => window.setPlaceState(p.id, targetState));
+            };
+            window.metaCheckboxes[metaCategory] = metaCb;
+            metaHeader.appendChild(metaCb);
+            metaWrapper.appendChild(metaHeader);
+
+            const categoryGroupContainer = document.createElement('div');
+            categoryGroupContainer.className = "space-y-4";
+
+            const categoriesObj = groupedPlaces[metaCategory];
+
+            Object.keys(categoriesObj).forEach(category => {
+                const folderDiv = document.createElement('div');
+                folderDiv.className = "border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm";
+                
+                const categoryPlaces = categoriesObj[category];
+                // Replacing /10 with /20 gives us the perfectly tinted, semi-transparent backgrounds back!
+                const folderBgClass = categoryPlaces[0].pinClass.split(' ')[0].replace('/10', '/20');
+
+                const header = document.createElement('button');
+                header.className = `w-full flex items-center justify-between p-3 ${folderBgClass} hover:opacity-80 transition-opacity font-semibold text-slate-800 text-sm focus:outline-none border-b border-white/50`;
+                
+                header.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span>${category}</span> 
+                        <span class="text-slate-600 text-xs font-normal bg-white/60 px-1.5 rounded-full shadow-sm">(${categoryPlaces.length})</span>
+                    </div>
+                `;
+                
+                const headerRight = document.createElement('div');
+                headerRight.className = "flex items-center gap-3";
+                
+                const catCb = document.createElement('input');
+                catCb.type = 'checkbox';
+                catCb.className = 'toggle-checkbox';
+                catCb.checked = true; // Changed to true by default
+                catCb.onclick = (e) => {
+                    e.stopPropagation();
+                    const targetState = e.target.checked;
+                    categoryPlaces.forEach(p => window.setPlaceState(p.id, targetState));
+                };
+                window.categoryCheckboxes[`${metaCategory}_${category}`] = catCb;
+                
+                const caret = document.createElement('i');
+                caret.className = "ph-bold ph-caret-down transition-transform duration-200 text-slate-600 transform";
+                
+                headerRight.appendChild(catCb);
+                headerRight.appendChild(caret);
+                header.appendChild(headerRight);
+
+                const content = document.createElement('div');
+                content.className = "divide-y divide-slate-100 bg-white hidden";
+                
+                header.addEventListener('click', () => {
+                    content.classList.toggle('hidden');
+                    caret.classList.toggle('-rotate-90');
+                });
+
+                folderDiv.appendChild(header);
+                folderDiv.appendChild(content);
+
+                categoryPlaces.forEach(place => {
+                    if (place.isSelected) bounds.push([place.lat, place.lng]);
+
+                    const isCornerstone = place.metaCategory === "Cornerstones";
+                    const shapeClass = isCornerstone ? 'rounded-xl' : 'rounded-full';
+                    
+                    // Container sizing to allow room for the SVG ring
+                    const outerSizeClass = isCornerstone ? 'w-14 h-14' : 'w-11 h-11';
+                    const innerSizeClass = isCornerstone ? 'w-[44px] h-[44px] text-2xl' : 'w-[34px] h-[34px] text-xl';
+                    const mapIconSize = isCornerstone ? [56, 56] : [44, 44];
+                    const mapIconAnchor = isCornerstone ? [28, 28] : [22, 22];
+
+                    // SVG Ring
+                    const svgRing = getProgressRing(place.duration, place.hexColor, isCornerstone);
+
+                    // Map Icon
+                    const customIcon = L.divIcon({
+                        className: 'custom-emoji-pin',
+                        html: `
+                        <div class="relative ${outerSizeClass} flex items-center justify-center transition-transform hover:scale-110">
+                            ${svgRing}
+                            <div class="absolute bg-white ${place.pinClass.replace('border-', 'ring-')} ring-1 ${innerSizeClass} ${shapeClass} flex items-center justify-center shadow-sm">
+                                ${place.emoji}
+                            </div>
+                        </div>`,
+                        iconSize: mapIconSize,
+                        iconAnchor: mapIconAnchor,
+                        popupAnchor: [0, -22]
+                    });
+
+                    const marker = L.marker([place.lat, place.lng], { icon: customIcon });
+                    if (place.isSelected) marker.addTo(map);
+                    window.mapMarkers[place.id] = marker; 
+                    
+                    const tooltipHTML = `
+                        <div class="font-bold text-slate-800 text-xs mb-0.5 leading-tight">${place.name}</div>
+                        <div class="text-[10px] text-slate-500 line-clamp-2 leading-tight">${place.why}</div>
+                    `;
+                    marker.bindTooltip(tooltipHTML, { permanent: true, direction: 'bottom', className: 'custom-pin-label', offset: [0, 24] });
+                    
+                    // Time indicator tag styling
+                    let timeIcon = place.duration === -1 ? 'ph-moon-stars' : (place.category === 'Wrocław Events' ? 'ph-calendar-blank' : 'ph-clock');
+                    let timeTagHTML = `<div class="bg-slate-100 text-slate-600 border border-slate-200 text-xs font-bold px-2 py-1 rounded flex items-center gap-1 w-fit mb-3"><i class="ph-fill ${timeIcon} text-slate-400"></i> ${place.durationText}</div>`;
+
+                    const popupHTML = `
+                        <div class="bg-white">
+                            <div class="${place.solidBg} h-12 w-full flex items-center px-4 gap-2">
+                                <span class="text-xl">${place.emoji}</span>
+                                <span class="text-white text-xs font-bold uppercase tracking-wider">${place.category}</span>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="text-xl font-bold text-slate-800 mb-2">${place.name}</h3>
+                                ${timeTagHTML}
+                                <p class="text-sm text-slate-600 mb-4 leading-relaxed">${place.why}</p>
+                                
+                                <div class="flex gap-2 border-t border-slate-100 pt-4">
+                                    <button onclick="window.setPlaceState('${place.id}', true); map.closePopup();" title="Keep" class="flex-1 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors py-2 rounded-lg text-xl flex items-center justify-center shadow-sm">✅</button>
+                                    <button onclick="window.setPlaceState('${place.id}', false); map.closePopup();" title="Discard" class="flex-1 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors py-2 rounded-lg text-xl flex items-center justify-center shadow-sm">❌</button>
+                                    <a href="https://www.google.com/search?q=${encodeURIComponent(place.name)}" target="_blank" title="Google Search" class="flex-1 bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors py-2 rounded-lg text-xl flex items-center justify-center shadow-sm">🔍</a>
+                                    ${place.eventLink ? `<a href="${place.eventLink}" target="_blank" title="Event Info" class="flex-1 bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors py-2 rounded-lg text-xl flex items-center justify-center shadow-sm">🎫</a>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    marker.bindPopup(popupHTML);
+
+                    // Sidebar List Item
+                    const listItem = document.createElement('div');
+                    listItem.className = "group p-3 hover:bg-slate-50 transition-all cursor-pointer flex gap-3.5"; // Removed items-center so text aligns nicely at top
+                    
+                    const placeCb = document.createElement('input');
+                    placeCb.type = 'checkbox';
+                    placeCb.className = 'toggle-checkbox flex-shrink-0 mt-2.5'; // Pushed down slightly to align with title
+                    placeCb.checked = place.isSelected;
+                    placeCb.onclick = (e) => { e.stopPropagation(); window.setPlaceState(place.id, e.target.checked); };
+
+                    const itemContent = document.createElement('div');
+                    itemContent.className = "flex flex-grow gap-3.5 transition-opacity" + (!place.isSelected ? " opacity-40 grayscale" : "");
+                    
+                    const sidebarOuter = isCornerstone ? 'w-12 h-12' : 'w-10 h-10';
+                    const sidebarInner = isCornerstone ? 'w-9 h-9 text-xl' : 'w-[30px] h-[30px] text-lg';
+                    
+                    // Added place.why back here!
+                    itemContent.innerHTML = `
+                        <div class="relative flex-shrink-0 ${sidebarOuter} flex items-center justify-center">
+                            ${svgRing}
+                            <div class="absolute bg-white ${place.pinClass.replace('border-', 'ring-')} ring-1 ${sidebarInner} ${shapeClass} flex items-center justify-center shadow-sm">
+                                ${place.emoji}
+                            </div>
+                        </div>
+                        <div class="flex-grow pt-0.5">
+                            <h4 class="font-bold text-slate-800 text-sm group-hover:text-blue-600 transition-colors leading-tight">${place.name}</h4>
+                            <div class="flex items-center gap-1 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                <i class="ph-bold ${timeIcon}"></i> ${place.durationText}
+                            </div>
+                            <p class="text-[11px] text-slate-500 line-clamp-2 mt-1 leading-snug pr-2">${place.why}</p>
+                        </div>
+                    `;
+                    
+                    listItem.appendChild(placeCb);
+                    listItem.appendChild(itemContent);
+                    window.sidebarItems[place.id] = { element: itemContent, checkbox: placeCb };
+
+                    listItem.addEventListener('click', () => {
+                        window.focusOnPlace(place.id);
+                    });
+
+                    content.appendChild(listItem);
+                });
+                categoryGroupContainer.appendChild(folderDiv);
+            });
+            metaWrapper.appendChild(categoryGroupContainer);
+            listContainer.appendChild(metaWrapper);
+        });
+
+        if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
+        
+        setTimeout(() => {
+            const firstFolderHeader = document.querySelector('#places-list button');
+            if(firstFolderHeader) firstFolderHeader.click();
+        }, 500);
+
+        // --- COLLABORATION & SIDEBAR LOGIC ---
+        
+        const leftSidebar = document.getElementById('left-sidebar');
+        const leftBurger = document.getElementById('left-burger');
+        const closeLeftBtn = document.getElementById('close-left-btn');
+
+        const rightSidebar = document.getElementById('right-sidebar');
+        const rightBurger = document.getElementById('right-burger');
+        const closeCollabBtn = document.getElementById('close-collab-btn');
+
+        // Left Sidebar Toggles
+        leftBurger.addEventListener('click', () => {
+            leftSidebar.classList.remove('-translate-x-full');
+            leftBurger.classList.add('hidden');
+        });
+        closeLeftBtn.addEventListener('click', () => {
+            leftSidebar.classList.add('-translate-x-full');
+            leftBurger.classList.remove('hidden');
+        });
+
+        // Right Sidebar Toggles
+        rightBurger.addEventListener('click', () => {
+            rightSidebar.classList.remove('translate-x-full');
+            rightBurger.classList.add('hidden');
+        });
+        closeCollabBtn.addEventListener('click', () => {
+            rightSidebar.classList.add('translate-x-full');
+            rightBurger.classList.remove('hidden');
+        });
+
+        // Setup Emojis for Export Modal
+        const animalEmojis = ['🦊','🐼','🦁','🐸','🐵','🦉','🐙','🦖','🦄','🦋','🐺','🐧','🦝','🐢','🐝'];
+        const picker = document.getElementById('emoji-picker');
+        let selectedEmoji = '🦊';
+        
+        animalEmojis.forEach(em => {
+            const btn = document.createElement('button');
+            btn.className = `text-2xl p-2 rounded-lg border-2 hover:bg-slate-50 transition-all ${em === selectedEmoji ? 'border-blue-500 bg-blue-50' : 'border-transparent'}`;
+            btn.innerText = em;
+            btn.onclick = () => {
+                selectedEmoji = em;
+                Array.from(picker.children).forEach(c => {
+                    c.classList.remove('border-blue-500', 'bg-blue-50');
+                    c.classList.add('border-transparent');
+                });
+                btn.classList.add('border-blue-500', 'bg-blue-50');
+                btn.classList.remove('border-transparent');
+            };
+            picker.appendChild(btn);
+        });
+
+        window.openExportModal = () => document.getElementById('export-modal').classList.replace('hidden', 'flex');
+        window.closeExportModal = () => document.getElementById('export-modal').classList.replace('flex', 'hidden');
+
+        window.confirmExport = () => {
+            const name = document.getElementById('export-name').value.trim() || 'Anonymous Explorer';
+            const selectedPlaceIds = window.allPlaces.filter(p => p.isSelected).map(p => p.id);
+            
+            const data = {
+                type: 'trip-plan-export',
+                user: name,
+                avatar: selectedEmoji,
+                date: new Date().toISOString(),
+                places: selectedPlaceIds
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            
+            // Format filename: name-yyyy-mm-dd-hh-mm-ss.json
+            const date = new Date();
+            const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+            const timeStr = `${String(date.getHours()).padStart(2,'0')}-${String(date.getMinutes()).padStart(2,'0')}-${String(date.getSeconds()).padStart(2,'0')}`;
+            const cleanName = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            
+            a.href = url;
+            a.download = `${cleanName}-${dateStr}-${timeStr}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            window.closeExportModal();
+        };
+
+        // --- NEW IMPORT LOGIC WITH WARNING ---
+        window.pendingImportFiles = null;
+
+        window.triggerImportWarning = (event) => {
+            const files = event.target.files;
+            if(!files.length) return;
+            
+            // Store files as an Array so they aren't lost when the input is cleared
+            window.pendingImportFiles = Array.from(files);
+            document.getElementById('import-warning-modal').classList.replace('hidden', 'flex');
+            
+            // Reset input so the same files can trigger the change event again if canceled
+            event.target.value = '';
+        };
+
+        window.cancelImport = () => {
+            window.pendingImportFiles = null;
+            document.getElementById('import-warning-modal').classList.replace('flex', 'hidden');
+        };
+
+        window.confirmImport = async () => {
+            document.getElementById('import-warning-modal').classList.replace('flex', 'hidden');
+            const files = window.pendingImportFiles;
+            if(!files || !files.length) return;
+            
+            for(let file of files) {
+                try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    if(data.type === 'trip-plan-export' && data.places && data.user) {
+                        window.importedData.push(data);
+                    }
+                } catch(e) {
+                    console.error("Failed to parse file", file.name);
+                }
+            }
+            
+            window.pendingImportFiles = null;
+            processImportedResults();
+        };
+
+        window.clearCollab = () => {
+            window.importedData = [];
+            processImportedResults();
+        };
+
+        function processImportedResults() {
+            document.getElementById('results-count').innerText = `${window.importedData.length} Plans Loaded`;
+            const resultsList = document.getElementById('results-list');
+            resultsList.innerHTML = '';
+            window.collabItems = {}; // Reset tracking
+            
+            if(window.importedData.length === 0) {
+                resultsList.innerHTML = '<div class="text-center text-slate-400 text-sm mt-10 italic">Import plans above to see the final group votes here!</div>';
+                return;
+            }
+
+            // Turn OFF all places on map first
+            window.allPlaces.forEach(p => window.setPlaceState(p.id, false));
+
+            // Tally votes
+            const votes = {}; // placeId -> array of user objects
+            window.importedData.forEach(plan => {
+                plan.places.forEach(pId => {
+                    if(!votes[pId]) votes[pId] = [];
+                    // Prevent duplicate votes from same user if they import their own file multiple times
+                    if(!votes[pId].find(v => v.name === plan.user)) {
+                        votes[pId].push({ name: plan.user, avatar: plan.avatar });
+                    }
+                    // Turn ON this place on the map
+                    window.setPlaceState(pId, true);
+                });
+            });
+
+            // Sort by vote count descending
+            const rankedPlaces = Object.keys(votes).map(id => ({
+                place: window.allPlaces.find(p => p.id === id),
+                voters: votes[id]
+            })).filter(x => x.place).sort((a, b) => b.voters.length - a.voters.length);
+
+            // Re-center map to show the aggregated selections
+            const newBounds = rankedPlaces.map(x => [x.place.lat, x.place.lng]);
+            if(newBounds.length > 0) map.fitBounds(newBounds, { padding: [50, 50] });
+
+            // Render list
+            rankedPlaces.forEach(rank => {
+                const p = rank.place;
+                const votersHtml = rank.voters.map(v => 
+                    `<div class="relative group/tooltip inline-block cursor-help">
+                        <div class="w-6 h-6 bg-slate-100 border border-slate-200 rounded-full flex items-center justify-center text-xs shadow-sm">${v.avatar}</div>
+                        <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-slate-800 text-white text-[10px] rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">${v.name}</div>
+                    </div>`
+                ).join('');
+
+                const isCornerstone = p.metaCategory === "Cornerstones";
+                const shapeClass = isCornerstone ? 'rounded-lg' : 'rounded-full';
+
+                const item = document.createElement('div');
+                item.className = "p-3 bg-slate-50 border border-slate-100 rounded-xl hover:border-blue-300 transition-colors cursor-pointer flex gap-3";
+                
+                const placeCb = document.createElement('input');
+                placeCb.type = 'checkbox';
+                placeCb.className = 'toggle-checkbox flex-shrink-0 mt-2';
+                placeCb.checked = p.isSelected;
+                placeCb.onclick = (e) => { e.stopPropagation(); window.setPlaceState(p.id, e.target.checked); };
+
+                const itemContent = document.createElement('div');
+                itemContent.className = "flex-grow transition-opacity" + (!p.isSelected ? " opacity-40 grayscale" : "");
+                itemContent.innerHTML = `
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex gap-3 items-center">
+                            <div class="w-8 h-8 ${p.pinClass.replace('border-','ring-')} ring-1 ${shapeClass} flex items-center justify-center bg-white shadow-sm text-sm shrink-0">${p.emoji}</div>
+                            <div>
+                                <div class="font-bold text-slate-800 text-xs leading-tight">${p.name}</div>
+                                <div class="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">${p.category}</div>
+                            </div>
+                        </div>
+                        <div class="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-full shrink-0">
+                            ${rank.voters.length} Votes
+                        </div>
+                    </div>
+                    <div class="flex gap-1 flex-wrap pt-2 border-t border-slate-200/50">
+                        ${votersHtml}
+                    </div>
+                `;
+
+                item.appendChild(placeCb);
+                item.appendChild(itemContent);
+                window.collabItems[p.id] = { element: itemContent, checkbox: placeCb };
+
+                item.addEventListener('click', () => {
+                    window.focusOnPlace(p.id);
+                });
+
+                resultsList.appendChild(item);
+            });
+        }
+
+        // --- TUTORIAL LOGIC ---
+        window.openTutorial = () => {
+            document.getElementById('tutorial-modal').classList.replace('hidden', 'flex');
+        };
+        
+        window.closeTutorial = () => {
+            document.getElementById('tutorial-modal').classList.replace('flex', 'hidden');
+            localStorage.setItem('masterPlanTutorialSeen', 'true');
+        };
+
+        // Show tutorial on first load
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!localStorage.getItem('masterPlanTutorialSeen')) {
+                setTimeout(window.openTutorial, 800); // Slight delay for dramatic effect
+            }
+        });
+    </script>
+</body>
+</html>
