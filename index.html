@@ -8,18 +8,24 @@
   <title>Tuesday’s pick — a little cinema</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="assets/grand-1-scenery.webp" as="image" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=centered-tiles-1">
-  <script src="app.js?v=centered-tiles-1" defer></script>
-  <script src="snap.js?v=centered-tiles-1" defer></script>
+  <link rel="stylesheet" href="assets/vendor/swiper-14.3.0/swiper-bundle.min.css">
+  <link rel="stylesheet" href="style.css?v=swiper-1">
+  <script src="assets/vendor/swiper-14.3.0/swiper-bundle.min.js" defer></script>
+  <script src="app.js?v=swiper-1" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#films">Skip to the films</a>
-  <header class="masthead" id="top">
+  <a class="skip-link" href="#grand">Skip to the films</a>
+  <main id="films" class="swiper cinema-carousel" aria-label="Tuesday’s movie selection">
+    <div class="swiper-wrapper">
+    <section class="swiper-slide intro-slide" id="top" data-hash="top" aria-label="Choose Tuesday’s mood">
+  <header class="masthead">
     <div class="masthead-meta"><time datetime="2026-10-27">TUESDAY, 27 OCTOBER</time></div>
     <h1>Choose Tuesday’s mood<span class="title-period">.</span></h1>
-    <a href="#films" class="explore">Take a look <span aria-hidden="true">↓</span></a>
+    <a href="#grand" class="explore">Take a look <span aria-hidden="true">↓</span></a>
   </header>
-  <main id="films" aria-label="Seven films to choose from"></main>
+    </section>
+    </div>
+  </main>
   <aside class="pick-bar" hidden aria-label="Your selected film"><div><span>TUESDAY’S PICK</span><strong id="pick-bar-title"></strong></div><button id="pick-bar-open" type="button">Your ticket <span aria-hidden="true">↗</span></button><button class="pick-clear" type="button" aria-label="Clear your selection">×</button></aside>
   <dialog id="ticket-dialog" class="ticket-dialog" aria-labelledby="ticket-heading">
     <div class="ticket-wrap"><button class="dialog-close" type="button" aria-label="Close ticket">×</button><div class="ticket-top"><span>A LITTLE CINEMA</span><span>27 OCT 2026</span></div><p class="ticket-eyebrow">TUESDAY’S PICK</p><h2 id="ticket-heading"></h2><p class="ticket-year"></p><img class="ticket-poster" alt=""><p class="ticket-question"></p><div class="ticket-perforation" aria-hidden="true"></div><button id="copy-choice" type="button">Copy Tuesday’s pick <span aria-hidden="true">↗</span></button><button class="keep-looking" type="button">Keep looking</button><p class="copy-status" aria-live="polite"></p></div>

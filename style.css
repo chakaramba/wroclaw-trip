@@ -18,24 +18,39 @@
 .masthead h1{margin:0;font-size:clamp(39px,5.1vw,80px)}
 .masthead .explore{padding-bottom:9px}
 .film{height:100dvh;min-height:min(670px,100dvh);max-height:none}
-html.is-snapping{scroll-behavior:auto!important}
 @media(max-width:760px){.masthead{padding:22px 24px 25px;column-gap:14px;row-gap:20px}.masthead h1{font-size:clamp(34px,7.5vw,52px)}.film{height:100dvh;min-height:min(760px,100dvh);max-height:none}.masthead .explore{padding-bottom:5px}}
 @container(max-height:650px) and (min-width:761px){.film-content{bottom:62px}.poster{width:120px}.film h2{font-size:40px;margin-bottom:10px}.film-year{margin-bottom:12px}.film-question{font-size:18px;line-height:1.3;margin-bottom:17px}}
 @container(max-height:700px) and (max-width:760px){.film-content{bottom:74px;grid-template-columns:72px minmax(0,1fr);gap:13px 17px}.poster{width:72px;height:108px}.film h2{font-size:29px}.film-question{font-size:18px;line-height:1.35}.film-year{margin-bottom:0}.choose-film{padding:11px 17px}}
 
-/* Rows retain their largest height; the visible composition stays centered. */
-.film{height:100vh;height:var(--film-height,100lvh);min-height:0;max-height:none}
 .film-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .google-search{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:1px solid #f4eee163;border-radius:30px;background:#17171638;min-height:46px;padding:12px 17px;font-size:12px;letter-spacing:.02em;white-space:nowrap;transition:background .2s,border-color .2s}
 .google-search svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.5;flex:none}
 .google-search .external-arrow{font-size:15px;color:#d3cfc4}
 .google-search:hover{background:#f4eee11c;border-color:#f4eee1b3}
-@media(max-width:760px){.film{height:100vh;height:var(--film-height,100lvh);min-height:0;max-height:none}.film-actions{grid-column:1/-1;justify-self:start;gap:10px;margin-top:3px}.film-actions .choose-film{margin-top:0}.google-search{min-height:45px;padding:11px 13px;font-size:11px;gap:7px}}
+@media(max-width:760px){.film-actions{grid-column:1/-1;justify-self:start;gap:10px;margin-top:3px}.film-actions .choose-film{margin-top:0}.google-search{min-height:45px;padding:11px 13px;font-size:11px;gap:7px}}
 @media(max-width:370px){.film-actions{gap:8px}.film-actions .choose-film{gap:13px;padding:12px 13px;font-size:11px;min-width:0}.google-search{padding:11px 12px;gap:6px}.google-search .external-arrow{display:none}}
 @media(prefers-reduced-motion:reduce){.google-search{transition:none}}
 
-/* Scroll position is preserved explicitly when film heights are committed. */
-html{overflow-anchor:none}
-
-.film-frame{position:absolute;inset-inline:0;top:50%;transform:translateY(-50%);height:100dvh;height:min(100%,var(--film-viewport-height,100dvh));isolation:isolate;overflow:hidden;container-type:size}
+/* Swiper controls the entire page; the document itself never scrolls. */
+html,body{height:100%;overflow:hidden;overscroll-behavior:none;scroll-behavior:auto}
+body{position:fixed;inset:0;width:100%}
+.cinema-carousel{position:absolute;inset:0;width:100%;height:100vh;height:100dvh}
+.film.swiper-slide{height:100%;min-height:0;max-height:none;flex-shrink:0;border:0}
+.film-frame{position:absolute;inset:0;width:100%;height:100%;isolation:isolate;overflow:hidden;container-type:size}
 .film::after{display:none}
+.intro-slide{display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 75% 20%,#3a2d2a 0%,#191918 65%);isolation:isolate}
+.intro-slide .masthead{width:100%;max-width:1400px;background:transparent;display:flex;flex-direction:column;align-items:flex-start;gap:32px;padding:7vw}
+.intro-slide .masthead-meta{align-self:stretch;justify-content:flex-start}
+.intro-slide .masthead h1{font-size:clamp(48px,8vw,120px);max-width:900px}
+.intro-slide .explore{font-size:12px;border:1px solid #f4eee166;border-radius:30px;padding:16px 24px;gap:30px}
+.intro-slide .explore span{font-size:20px}
+@media(max-width:760px){.intro-slide .masthead{padding:28px;gap:28px}.intro-slide .masthead h1{font-size:clamp(48px,12vw,80px)}}
+@media(prefers-reduced-motion:reduce){.swiper-wrapper{transition-duration:0ms!important}}
+/* Keep the saved-choice bar clear of the card's actions and still controls. */
+body.has-pick{--pick-space:88px}
+.film-content{bottom:calc(var(--content-bottom,69px) + var(--pick-space,0px))}
+.film-controls{bottom:calc(27px + var(--pick-space,0px))}
+.film-bottom-note{bottom:calc(39px + var(--pick-space,0px))}
+@media(max-width:760px){.film-content{--content-bottom:82px}}
+@container(max-height:700px) and (max-width:760px){.film-content{--content-bottom:74px}}
+@container(max-height:650px) and (min-width:761px){.film-content{--content-bottom:62px}}

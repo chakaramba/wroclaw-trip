@@ -10,20 +10,19 @@ const films = [
 ];
 const sceneryFrames = new Set(["grand-1", "grand-3", "fox-3", "kaguya-2", "kubo-1", "kubo-2", "kubo-3"]);
 const stillPath = (id, frame) => `assets/${id}-${frame}${sceneryFrames.has(`${id}-${frame}`) ? '-scenery' : ''}.webp`;
-const main = document.querySelector('#films');
-main.innerHTML = films.map((film,index)=>`<section class="film" id="${film.id}" aria-labelledby="${film.id}-title" style="--accent:${film.accent};--position:${film.position};--mobile-position:${film.mobilePosition}">
+const main = document.querySelector('.swiper-wrapper');
+main.insertAdjacentHTML('beforeend', films.map((film,index)=>`<section class="film swiper-slide" id="${film.id}" data-hash="${film.id}" aria-labelledby="${film.id}-title" style="--accent:${film.accent};--position:${film.position};--mobile-position:${film.mobilePosition}">
   <div class="film-frame"><div class="scene-stack" aria-hidden="true">${[1,2,3].map((frame)=>`<figure class="scene ${frame===1?'is-active':''}"><img ${frame===1?'src':'data-src'}="${stillPath(film.id,frame)}" alt="" ${index===0&&frame===1?'fetchpriority="high"':'loading="lazy"'} decoding="async" width="1600" height="1000"></figure>`).join('')}</div>
   <div class="film-shade" aria-hidden="true"></div><div class="grain" aria-hidden="true"></div>
   <div class="film-number">${String(index+1).padStart(2,'0')} <span>/</span> 07</div>
   <a class="scroll-down" href="${index===films.length-1?'#top':'#'+films[index+1].id}" aria-label="${index===films.length-1?'Back to beginning':'Next film: '+films[index+1].title}">${index===films.length-1?'↑':'↓'}</a>
   <div class="film-content"><img class="poster" src="assets/${film.id}-poster.webp" alt="${film.title} theatrical poster" width="240" height="360" loading="${index===0?'eager':'lazy'}" decoding="async"><div class="film-copy"><h2 id="${film.id}-title">${film.title}</h2><p class="film-year">${film.year}</p><p class="film-question">${film.question}</p><div class="film-actions"><button class="choose-film" type="button" data-film="${film.id}" aria-pressed="false" aria-label="Choose ${film.title} for Tuesday"><span class="choose-label">This one for Tuesday</span><span class="arrow" aria-hidden="true">↗</span></button><a class="google-search" href="https://www.google.com/search?q=${encodeURIComponent(`${film.title} ${film.year} film`)}" target="_blank" rel="noopener noreferrer" aria-label="Search Google for ${film.title} (${film.year}) (opens a new tab)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><span>Google</span><span class="external-arrow" aria-hidden="true">↗</span></a></div></div></div>
   <span class="film-bottom-note">TUESDAY, 27 OCTOBER</span><div class="film-controls"><span class="slide-caption" aria-hidden="true">STILLS</span><div class="slide-dots" role="group" aria-label="${film.title} background stills">${[1,2,3].map((n)=>`<button class="slide-dot" type="button" data-frame="${n-1}" aria-label="Show still ${n} of ${film.title}" aria-pressed="${n===1}"></button>`).join('')}</div><button class="pause-slides" type="button" aria-label="Pause ${film.title} slideshow" aria-pressed="false"><span aria-hidden="true">Ⅱ</span></button></div>
-</div></section>`).join('');
+</div></section>`).join(''));
 const sections=[...document.querySelectorAll('.film')];
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 const states=sections.map(()=>({frame:0,paused:reducedMotion.matches,token:0}));
-let active=0,timer=null,selected=null,lastFocus=null;
-const ratios=new Map();
+let active=-1,timer=null,selected=null,lastFocus=null;
 function loadFrames(index){sections[index].querySelectorAll('img[data-src]').forEach(img=>{img.src=img.dataset.src;delete img.dataset.src;});}
 async function setFrame(index,frame){
   const section=sections[index],state=states[index];
@@ -48,12 +47,6 @@ sections.forEach((section,index)=>{
   section.querySelector('.choose-film').addEventListener('click',()=>choose(films[index]));
   updatePause(index);
 });
-const observer=new IntersectionObserver(entries=>{
-  entries.forEach(entry=>{ratios.set(entry.target,entry.intersectionRatio);if(entry.isIntersecting)loadFrames(sections.indexOf(entry.target));});
-  let largest=0,next=-1;ratios.forEach((ratio,section)=>{if(ratio>largest){largest=ratio;next=sections.indexOf(section);}});
-  if(next!==active){active=next;resetTimer();}
-},{threshold:[0,.1,.25,.4,.6,.8,1]});
-sections.forEach(section=>observer.observe(section));
 document.addEventListener('visibilitychange',resetTimer);
 reducedMotion.addEventListener('change',event=>{states.forEach((state,index)=>{state.paused=event.matches;updatePause(index);});resetTimer();});
 loadFrames(0);resetTimer();
@@ -67,7 +60,7 @@ function reflectChoice(){
   if(selected)document.querySelector('#pick-bar-title').textContent=selected.title;
 }
 function choose(film){selected=film;try{localStorage.setItem('tuesdays-pick-2026-10-27',film.id);}catch{}reflectChoice();showTicket();}
-function showTicket(){if(!selected)return;lastFocus=document.activeElement;document.querySelector('#ticket-heading').textContent=selected.title;document.querySelector('.ticket-year').textContent=selected.year;const poster=document.querySelector('.ticket-poster');poster.src=`assets/${selected.id}-poster.webp`;poster.alt=`${selected.title} poster`;document.querySelector('.ticket-question').textContent=selected.question;status.textContent='';ticket.showModal();}
+function showTicket(){if(!selected)return;lastFocus=document.activeElement;document.querySelector('#ticket-heading').textContent=selected.title;document.querySelector('.ticket-year').textContent=selected.year;const poster=document.querySelector('.ticket-poster');poster.src=`assets/${selected.id}-poster.webp`;poster.alt=`${selected.title} poster`;document.querySelector('.ticket-question').textContent=selected.question;status.textContent='';ticket.showModal();carousel.keyboard.disable();carousel.mousewheel.disable();carousel.allowTouchMove=false;}
 function clearChoice(){selected=null;try{localStorage.removeItem('tuesdays-pick-2026-10-27');}catch{}reflectChoice();}
 function closeDialog(dialog){dialog.close();if(lastFocus?.isConnected)lastFocus.focus();}
 document.querySelector('#pick-bar-open').addEventListener('click',showTicket);
@@ -84,3 +77,43 @@ document.querySelectorAll('dialog').forEach(dialog=>{
   dialog.addEventListener('click',event=>{if(event.target!==dialog)return;const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeDialog(dialog);});
 });
 try{const saved=localStorage.getItem('tuesdays-pick-2026-10-27');selected=films.find(f=>f.id===saved)||null;reflectChoice();}catch{}
+
+
+// Swiper owns gestures, slide snapping and container resizing. No page scroll loop.
+function filmChanged(swiper) {
+  active = swiper.activeIndex - 1;
+  if (active >= 0) {
+    loadFrames(active);
+    if (active > 0) loadFrames(active - 1);
+    if (active + 1 < sections.length) loadFrames(active + 1);
+  }
+  resetTimer();
+}
+const carousel = new Swiper('.cinema-carousel', {
+  direction: 'vertical',
+  slidesPerView: 1,
+  speed: reducedMotion.matches ? 0 : 550,
+  loop: false,
+  resizeObserver: true,
+  keyboard: { enabled: true, onlyInViewport: true },
+  mousewheel: { forceToAxis: true, releaseOnEdges: false, thresholdDelta: 15, thresholdTime: 450 },
+  hashNavigation: { watchState: true, replaceState: true },
+  noSwipingSelector: 'button,a,input,textarea,select',
+  a11y: { containerMessage: 'Tuesday’s movie selection', itemRoleDescriptionMessage: 'slide' },
+  on: { init: filmChanged, slideChange: filmChanged }
+});
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  link.addEventListener('click', event => {
+    const hash = link.getAttribute('href').slice(1);
+    const index = [...carousel.slides].findIndex(slide => slide.dataset.hash === hash);
+    if (index < 0) return;
+    event.preventDefault();
+    carousel.slideTo(index);
+  });
+});
+ticket.addEventListener('close', () => {
+  carousel.keyboard.enable();
+  carousel.mousewheel.enable();
+  carousel.allowTouchMove = true;
+});
+reducedMotion.addEventListener('change', event => { carousel.params.speed = event.matches ? 0 : 550; });
