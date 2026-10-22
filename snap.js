@@ -11,10 +11,15 @@
   let previousY = window.scrollY, previousTime = performance.now();
   let lastScroll = 0, lastInput = 0, velocity = 0;
   let resizeTimer = 0;
+  let alignedPanel = null, resizeAnchor = null;
+  const viewportHeight = () => window.visualViewport?.height || window.innerHeight;
+  function rememberAlignment() {
+    alignedPanel = panels.find(panel => Math.abs(panel.getBoundingClientRect().top) < 2) || null;
+  }
   root.dataset.snapState = 'idle';
 
   function blocked() {
-    return document.hidden || touching || pointerDown || !!document.querySelector('dialog[open]') || !window.getSelection()?.isCollapsed;
+    return document.hidden || Math.abs((window.visualViewport?.scale || 1) - 1) > .01 || touching || pointerDown || !!document.querySelector('dialog[open]') || !window.getSelection()?.isCollapsed;
   }
   function cancelLanding() {
     clearTimeout(idleTimer);
@@ -29,6 +34,8 @@
     if (!blocked() && !animating) idleTimer = setTimeout(settle, delay);
   }
   function interrupted() {
+    alignedPanel = null;
+    resizeAnchor = null;
     cancelLanding();
     lastInput = performance.now();
     previousY = window.scrollY;
@@ -37,23 +44,24 @@
     schedule(220);
   }
   function targets() {
-    const limit = Math.max(0, root.scrollHeight - window.innerHeight);
+    const limit = Math.max(0, root.scrollHeight - viewportHeight());
     return [0, ...panels.map(panel => clamp(panel.getBoundingClientRect().top + window.scrollY, 0, limit))];
   }
   function settle() {
     if (blocked() || animating) return;
+    if (resizeTimer) { schedule(180); return; }
     const now = performance.now();
     const quietFor = now - Math.max(lastScroll, lastInput);
     // Momentum produces scroll events even after the fingers have lifted.
     if (quietFor < 170) { schedule(180 - quietFor); return; }
     const y = window.scrollY;
-    const viewport = window.innerHeight;
+    const viewport = viewportHeight();
     const remainingVelocity = velocity * Math.exp(-quietFor / 70);
     const projected = y + clamp(remainingVelocity * 120, -viewport * .1, viewport * .1);
     const options = targets();
     const target = options.reduce((best, option) => Math.abs(option - projected) < Math.abs(best - projected) ? option : best, options[0]);
     // Leave tiny alignment differences alone; this also prevents snap loops.
-    if (Math.abs(target - y) < 2) { root.dataset.snapState = 'idle'; return; }
+    if (Math.abs(target - y) < 2) { root.dataset.snapState = 'idle'; rememberAlignment(); return; }
     land(target, remainingVelocity * 1000);
   }
   function land(target, initialVelocity = 0) {
@@ -65,6 +73,7 @@
       previousY = window.scrollY;
       previousTime = performance.now();
       velocity = 0;
+      rememberAlignment();
       return;
     }
     const startY = window.scrollY;
@@ -92,6 +101,7 @@
         previousY = window.scrollY;
         previousTime = now;
         velocity = 0;
+        rememberAlignment();
         return;
       }
       animation = requestAnimationFrame(frame);
@@ -123,15 +133,25 @@
     if (!editing && ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) interrupted();
   });
   window.addEventListener('scrollend', () => { if (!animating) schedule(180); }, { passive: true });
-  window.addEventListener('resize', () => {
+  function viewportResized() {
+    // Preserve the film after an idle viewport resize, but never lock a live gesture.
+    if (!resizeAnchor) resizeAnchor = alignedPanel;
     cancelLanding();
     clearTimeout(resizeTimer);
-    // Browser chrome and the on-screen keyboard can both resize the viewport.
     resizeTimer = setTimeout(() => {
+      resizeTimer = 0;
       const field = document.activeElement?.matches('input,textarea,[contenteditable=true]');
-      if (!field) schedule(280);
+      if (field || blocked()) return;
+      const anchor = resizeAnchor;
+      resizeAnchor = null;
+      if (anchor) {
+        const limit = Math.max(0, root.scrollHeight - viewportHeight());
+        land(clamp(anchor.getBoundingClientRect().top + window.scrollY, 0, limit));
+      } else schedule(180);
     }, 300);
-  }, { passive: true });
+  }
+  window.addEventListener('resize', viewportResized, { passive: true });
+  window.visualViewport?.addEventListener('resize', viewportResized, { passive: true });
   window.addEventListener('blur', () => { touching = false; pointerDown = false; cancelLanding(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancelLanding(); });
   document.querySelectorAll('dialog').forEach(dialog => {
