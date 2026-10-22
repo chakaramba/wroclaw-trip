@@ -1,4 +1,4 @@
-/* Let native momentum flow into a critically damped landing at matching speed. */
+/* Idle snapping: native wheel/touch momentum first, a soft landing second. */
 (() => {
   'use strict';
   const root = document.documentElement;
@@ -7,14 +7,10 @@
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
   let idleTimer = 0, animation = 0, animating = false;
-  let pointerDown = false, touching = false, scrollKeyDown = false;
+  let pointerDown = false, touching = false;
   let previousY = window.scrollY, previousTime = performance.now();
   let lastScroll = 0, lastInput = 0, velocity = 0;
-  let resizeTimer = 0, momentumFrame = 0;
-  let gesturePending = false, slowSince = 0;
-  const springOmega = 15;
-  // px/ms: the spring's peak speed from rest, bounded for short and long moves.
-  const captureSpeed = distance => clamp(Math.abs(distance) * springOmega / Math.E / 1000, .12, .9);
+  let resizeTimer = 0;
   let alignedPanel = null, resizeAnchor = null;
   const viewportHeight = () => window.visualViewport?.height || window.innerHeight;
   function rememberAlignment() {
@@ -23,12 +19,10 @@
   root.dataset.snapState = 'idle';
 
   function blocked() {
-    return document.hidden || Math.abs((window.visualViewport?.scale || 1) - 1) > .01 || touching || pointerDown || scrollKeyDown || !!document.querySelector('dialog[open]') || !window.getSelection()?.isCollapsed;
+    return document.hidden || Math.abs((window.visualViewport?.scale || 1) - 1) > .01 || touching || pointerDown || !!document.querySelector('dialog[open]') || !window.getSelection()?.isCollapsed;
   }
   function cancelLanding() {
     clearTimeout(idleTimer);
-    cancelAnimationFrame(momentumFrame);
-    momentumFrame = 0;
     cancelAnimationFrame(animation);
     animation = 0;
     animating = false;
@@ -37,64 +31,35 @@
   }
   function schedule(delay = 180) {
     clearTimeout(idleTimer);
-    if (!blocked() && !animating) {
-      idleTimer = setTimeout(settle, delay);
-      if (gesturePending && !momentumFrame) momentumFrame = requestAnimationFrame(watchMomentum);
-    }
+    if (!blocked() && !animating) idleTimer = setTimeout(settle, delay);
   }
-  function watchMomentum(now) {
-    momentumFrame = 0;
-    if (blocked() || animating || !gesturePending) return;
-    // A resize needs to finish before its new tile positions can be trusted.
-    if (!resizeTimer && now - lastInput >= 110) {
-      const speed = currentVelocity(now);
-      const target = nearestTarget(window.scrollY, speed);
-      if (Math.abs(speed) <= captureSpeed(target - window.scrollY)) {
-        if (!slowSince) slowSince = now;
-        if (now - slowSince >= 80) { settle(true); return; }
-      } else slowSince = 0;
-    } else slowSince = 0;
-    momentumFrame = requestAnimationFrame(watchMomentum);
-  }
-  function currentVelocity(now) {
-    // Between momentum frames retain measured speed; decay only once events stop.
-    return velocity * Math.exp(-Math.max(0, now - lastScroll - 50) / 70);
-  }
-  function nearestTarget(y, speed) {
-    const projected = y + clamp(speed * 120, -viewportHeight() * .1, viewportHeight() * .1);
-    return targets().reduce((best, option) => Math.abs(option - projected) < Math.abs(best - projected) ? option : best, 0);
-  }
-  function interrupted(preserveVelocity = false) {
+  function interrupted() {
     alignedPanel = null;
     resizeAnchor = null;
     cancelLanding();
-    gesturePending = true;
-    slowSince = 0;
     lastInput = performance.now();
-    if (!preserveVelocity) {
-      previousY = window.scrollY;
-      previousTime = lastInput;
-      velocity = 0;
-    }
+    previousY = window.scrollY;
+    previousTime = lastInput;
+    velocity = 0;
     schedule(220);
   }
   function targets() {
     const limit = Math.max(0, root.scrollHeight - viewportHeight());
     return [0, ...panels.map(panel => clamp(panel.getBoundingClientRect().top + window.scrollY, 0, limit))];
   }
-  function settle(captureMomentum = false) {
+  function settle() {
     if (blocked() || animating) return;
     if (resizeTimer) { schedule(180); return; }
     const now = performance.now();
     const quietFor = now - Math.max(lastScroll, lastInput);
     // Momentum produces scroll events even after the fingers have lifted.
-    if (!captureMomentum && quietFor < 170) { schedule(180 - quietFor); return; }
+    if (quietFor < 170) { schedule(180 - quietFor); return; }
     const y = window.scrollY;
-    const remainingVelocity = currentVelocity(now);
-    const target = nearestTarget(y, remainingVelocity);
-    gesturePending = false;
-    cancelAnimationFrame(momentumFrame);
-    momentumFrame = 0;
+    const viewport = viewportHeight();
+    const remainingVelocity = velocity * Math.exp(-quietFor / 70);
+    const projected = y + clamp(remainingVelocity * 120, -viewport * .1, viewport * .1);
+    const options = targets();
+    const target = options.reduce((best, option) => Math.abs(option - projected) < Math.abs(best - projected) ? option : best, options[0]);
     // Leave tiny alignment differences alone; this also prevents snap loops.
     if (Math.abs(target - y) < 2) { root.dataset.snapState = 'idle'; rememberAlignment(); return; }
     land(target, remainingVelocity * 1000);
@@ -114,7 +79,7 @@
     const startY = window.scrollY;
     const offset = startY - target;
     // A critically damped spring lands without bouncing across a boundary.
-    const omega = springOmega;
+    const omega = 15;
     const v = clamp(initialVelocity, -1600, 1600);
     const coefficient = v + omega * offset;
     const began = performance.now();
@@ -156,10 +121,7 @@
     previousY = y;
     previousTime = now;
   }, { passive: true });
-  window.addEventListener('wheel', () => {
-    // Wheel events include trackpad momentum: each fresh event yields to the user.
-    interrupted(true);
-  }, { passive: true });
+  window.addEventListener('wheel', interrupted, { passive: true });
   window.addEventListener('touchstart', () => { touching = true; interrupted(); }, { passive: true });
   window.addEventListener('touchend', () => { touching = false; lastInput = performance.now(); schedule(220); }, { passive: true });
   window.addEventListener('touchcancel', () => { touching = false; schedule(220); }, { passive: true });
@@ -168,10 +130,7 @@
   window.addEventListener('pointercancel', () => { pointerDown = false; schedule(220); }, { passive: true });
   window.addEventListener('keydown', event => {
     const editing = event.target instanceof Element && event.target.closest('input,textarea,select,[contenteditable=true]');
-    if (!editing && ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) { scrollKeyDown = true; interrupted(); }
-  });
-  window.addEventListener('keyup', () => {
-    if (scrollKeyDown) { scrollKeyDown = false; lastInput = performance.now(); schedule(220); }
+    if (!editing && ['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)) interrupted();
   });
   window.addEventListener('scrollend', () => { if (!animating) schedule(180); }, { passive: true });
   function viewportResized() {
@@ -193,7 +152,7 @@
   }
   window.addEventListener('resize', viewportResized, { passive: true });
   window.visualViewport?.addEventListener('resize', viewportResized, { passive: true });
-  window.addEventListener('blur', () => { touching = false; pointerDown = false; scrollKeyDown = false; cancelLanding(); });
+  window.addEventListener('blur', () => { touching = false; pointerDown = false; cancelLanding(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) cancelLanding(); });
   document.querySelectorAll('dialog').forEach(dialog => {
     dialog.addEventListener('close', () => schedule(250));
