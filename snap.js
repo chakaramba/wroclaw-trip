@@ -10,14 +10,16 @@
   let pointerDown = false, touching = false, scrollKeyDown = false;
   let previousY = window.scrollY, previousTime = performance.now();
   let lastScroll = 0, lastInput = 0, velocity = 0;
-  let resizeTimer = 0, momentumFrame = 0;
+  let momentumFrame = 0;
   let gesturePending = false, slowSince = 0;
   const springOmega = 15;
   // px/ms: the spring's peak speed from rest, bounded for short and long moves.
   const captureSpeed = distance => clamp(Math.abs(distance) * springOmega / Math.E / 1000, .12, .9);
-  let pendingHeight = null, layoutScrollY = null;
+  let layoutScrollY = null;
   const viewportHeight = () => window.visualViewport?.height || window.innerHeight;
-  root.style.setProperty('--film-height', `${viewportHeight()}px`);
+  let tileHeight = Math.max(viewportHeight(), panels[0].getBoundingClientRect().height);
+  root.style.setProperty('--film-height', `${tileHeight}px`);
+  root.style.setProperty('--film-viewport-height', `${viewportHeight()}px`);
   root.dataset.snapState = 'idle';
 
   function blocked() {
@@ -43,8 +45,7 @@
   function watchMomentum(now) {
     momentumFrame = 0;
     if (blocked() || animating || !gesturePending) return;
-    // A resize needs to finish before its new tile positions can be trusted.
-    if (!resizeTimer && now - lastInput >= 110) {
+    if (now - lastInput >= 110) {
       const speed = currentVelocity(now);
       const target = nearestTarget(window.scrollY, speed);
       if (Math.abs(speed) <= captureSpeed(target - window.scrollY)) {
@@ -74,19 +75,21 @@
     }
     schedule(220);
   }
-  function targets() {
+  function panelTarget(panel) {
+    const rect = panel.getBoundingClientRect();
     const limit = Math.max(0, root.scrollHeight - viewportHeight());
-    return [0, ...panels.map(panel => clamp(panel.getBoundingClientRect().top + window.scrollY, 0, limit))];
+    return clamp(rect.top + window.scrollY + rect.height / 2 - viewportHeight() / 2, 0, limit);
+  }
+  function targets() {
+    return [0, ...panels.map(panelTarget)];
   }
   function settle(captureMomentum = false) {
     if (blocked() || animating) return;
-    if (resizeTimer) { schedule(180); return; }
     const now = performance.now();
     const quietFor = now - Math.max(lastScroll, lastInput);
     // Momentum produces scroll events even after the fingers have lifted.
     if (!captureMomentum && quietFor < 170) { schedule(180 - quietFor); return; }
     const remainingVelocity = currentVelocity(now);
-    applyViewportHeight();
     const y = window.scrollY;
     const target = nearestTarget(y, remainingVelocity);
     gesturePending = false;
@@ -108,6 +111,8 @@
       return;
     }
     const startY = window.scrollY;
+    const destination = panels.find(panel => Math.abs(panelTarget(panel) - target) < 2);
+    const originalTarget = target;
     const offset = startY - target;
     // A critically damped spring lands without bouncing across a boundary.
     const omega = springOmega;
@@ -120,6 +125,9 @@
     function frame(now) {
       if (!animating) return;
       if (blocked()) { cancelLanding(); return; }
+      // Browser bars change the viewport center, never the row's center.
+      // Follow that small offset without restarting the spring or moving its row.
+      target = destination ? panelTarget(destination) : originalTarget;
       const t = (now - began) / 1000;
       const position = target + (offset + coefficient * t) * Math.exp(-omega * t);
       window.scrollTo({ top: position, behavior: 'instant' });
@@ -178,45 +186,32 @@
     if (scrollKeyDown) { scrollKeyDown = false; lastInput = performance.now(); schedule(220); }
   });
   window.addEventListener('scrollend', () => { if (!animating) schedule(180); }, { passive: true });
-  function applyViewportHeight() {
-    if (pendingHeight === null) return;
-    // Commit only at the momentum-to-snap handoff, never during a gesture.
-    // Keep the visible film at the same screen position when preceding rows resize.
-    const firstTop = panels[0].getBoundingClientRect().top;
-    const anchor = firstTop <= 0
-      ? panels.reduce((best, panel) => Math.abs(panel.getBoundingClientRect().top) < Math.abs(best.getBoundingClientRect().top) ? panel : best)
-      : null;
-    const top = anchor?.getBoundingClientRect().top;
-    root.classList.add('is-snapping');
-    root.style.setProperty('--film-height', `${pendingHeight}px`);
-    pendingHeight = null;
-    if (anchor) {
-      const limit = Math.max(0, root.scrollHeight - viewportHeight());
-      const corrected = clamp(window.scrollY + anchor.getBoundingClientRect().top - top, 0, limit);
-      window.scrollTo({ top: corrected, behavior: 'instant' });
-      layoutScrollY = window.scrollY;
-      previousY = window.scrollY;
-      previousTime = performance.now();
-    }
-    root.classList.remove('is-snapping');
-  }
   function viewportResized() {
     const field = document.activeElement?.matches('input,textarea,[contenteditable=true]');
     if (field || Math.abs((window.visualViewport?.scale || 1) - 1) > .01) return;
     const height = viewportHeight();
-    const committed = parseFloat(root.style.getPropertyValue('--film-height'));
-    if (Math.abs(height - committed) < 2 && pendingHeight === null) return;
-    pendingHeight = height;
-    // Browser-bar animation must not reflow all seven rows or retarget a spring.
-    const resumeGesture = gesturePending || animating;
-    cancelLanding();
-    gesturePending = resumeGesture;
-    slowSince = 0;
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      resizeTimer = 0;
-      schedule(180);
-    }, 220);
+    root.style.setProperty('--film-viewport-height', `${height}px`);
+    if (height > tileHeight + 1) {
+      // Normally 100lvh already reserves all the room Chrome's bars can reveal.
+      // If the screen grows further, expand once and retain the visible row.
+      const anchor = panels.reduce((best, panel) => Math.abs(panel.getBoundingClientRect().top) < Math.abs(best.getBoundingClientRect().top) ? panel : best);
+      const top = anchor.getBoundingClientRect().top;
+      const inFilms = panels[0].getBoundingClientRect().top <= 0;
+      cancelLanding();
+      tileHeight = height;
+      root.classList.add('is-snapping');
+      root.style.setProperty('--film-height', `${tileHeight}px`);
+      if (inFilms) {
+        window.scrollTo({ top: window.scrollY + anchor.getBoundingClientRect().top - top, behavior: 'instant' });
+        layoutScrollY = window.scrollY;
+        previousY = window.scrollY;
+        previousTime = performance.now();
+      }
+      root.classList.remove('is-snapping');
+    }
+    // Shrinking the visible screen only changes the centered inner composition.
+    // An active spring follows the new viewport center without interruption.
+    if (!animating) schedule(180);
   }
   window.addEventListener('resize', viewportResized, { passive: true });
   window.visualViewport?.addEventListener('resize', viewportResized, { passive: true });
